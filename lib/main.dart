@@ -3,170 +3,151 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(TaskApp());
+  runApp(MyApp());
 }
 
-class Task {
-  String id; // Firestore document ID
-  String name;
-  bool isCompleted;
-  String priority;
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
-  Task({this.id = '', required this.name, this.isCompleted = false, required this.priority});
-
-  factory Task.fromMap(Map<String, dynamic> data, String documentId) {
-    return Task(
-      id: documentId,
-      name: data['name'] ?? '',
-      isCompleted: data['isCompleted'] ?? false,
-      priority: data['priority'] ?? 'Medium',
-    );
-  }
-
-  Map<String, dynamic> toMap(String userId) {
-    return {
-      'name': name,
-      'isCompleted': isCompleted,
-      'priority': priority,
-      'userId': userId,
-    };
-  }
-}
-
-
-class TaskApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: TaskListScreen(),
+      title: 'Task Manager',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: const TaskListScreen(),
     );
   }
 }
 
 class TaskListScreen extends StatefulWidget {
+  const TaskListScreen({super.key});
+
   @override
-  _TaskListScreenState createState() => _TaskListScreenState();
+  State<TaskListScreen> createState() => _TaskListScreenState();
 }
 
 class _TaskListScreenState extends State<TaskListScreen> {
-     final CollectionReference inventory = 
-      FirebaseFirestore.instance.collection('inventory');
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  List<Task> tasks = [];
-  final TextEditingController _taskController = TextEditingController();
-  String _selectedPriority = 'Medium';
-  final List<String> _priorities = ['High', 'Medium', 'Low'];
+  TextEditingController taskController = TextEditingController();
+  String? uid; // Make the UID nullable
 
-  void _addTask() async {
-  if (_taskController.text.isNotEmpty) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await inventory.add({
-        'name': _taskController.text,
-        'isCompleted': false,
-        'priority': _selectedPriority,
-        'userId': user.uid,
-      });
+  @override
+  void initState() {
+    super.initState();
+    // Get the current user UID safely
+    if (_auth.currentUser != null) {
+      uid = _auth.currentUser!.uid;
     }
-    _taskController.clear();
   }
-}
 
+  Future<void> _addTask(String taskName) async {
+    if (taskName.trim().isEmpty || uid == null) return; // Return early if uid is null
 
-  void _toggleTaskCompletion(int index) {
-    setState(() {
-      tasks[index].isCompleted = !tasks[index].isCompleted;
+    await _firestore.collection('tasks').add({
+      'userId': uid,
+      'title': taskName,
+      'completed': false,
+      'timestamp': FieldValue.serverTimestamp(),
+      'subtasks': [],
+    });
+
+    taskController.clear();
+  }
+
+  Future<void> _toggleComplete(String taskId, bool currentStatus) async {
+    await _firestore.collection('tasks').doc(taskId).update({
+      'completed': !currentStatus,
     });
   }
 
-  void _removeTask(int index) {
-    setState(() {
-      tasks.removeAt(index);
-    });
-  }
-
-  void _sortTasks() {
-    tasks.sort((a, b) {
-      return _priorities.indexOf(a.priority).compareTo(_priorities.indexOf(b.priority));
-    });
+  Future<void> _deleteTask(String taskId) async {
+    await _firestore.collection('tasks').doc(taskId).delete();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Task Manager')),
+      appBar: AppBar(
+        title: const Text('Task Manager'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await _auth.signOut();
+              Navigator.of(context).pop(); // Go back to login screen
+            },
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
-            padding: EdgeInsets.all(8.0),
+            padding: const EdgeInsets.all(8),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _taskController,
-                    decoration: InputDecoration(
-                      labelText: 'Enter task',
-                      border: OutlineInputBorder(),
+                    controller: taskController,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter new task',
                     ),
                   ),
                 ),
-                SizedBox(width: 8),
-                DropdownButton<String>(
-                  value: _selectedPriority,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedPriority = newValue!;
-                    });
-                  },
-                  items: _priorities.map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                ),
-                SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _addTask,
-                  child: Text('Add'),
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: () => _addTask(taskController.text),
                 ),
               ],
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: tasks.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  title: Text(
-                    tasks[index].name,
-                    style: TextStyle(
-                      decoration: tasks[index].isCompleted
-                          ? TextDecoration.lineThrough
-                          : null,
-                    ),
-                  ),
-                  subtitle: Text('Priority: ${tasks[index].priority}'),
-                  leading: Checkbox(
-                    value: tasks[index].isCompleted,
-                    onChanged: (value) {
-                      _toggleTaskCompletion(index);
-                    },
-                  ),
-                  trailing: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                    ),
-                    onPressed: () => _removeTask(index),
-                    child: Text('Delete', style: TextStyle(color: Colors.white)),
-                  ),
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _firestore
+                  .collection('tasks')
+                  .where('userId', isEqualTo: uid)
+                  .orderBy('timestamp', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const CircularProgressIndicator();
+
+                final tasks = snapshot.data!.docs;
+
+                return ListView.builder(
+                  itemCount: tasks.length,
+                  itemBuilder: (context, index) {
+                    var task = tasks[index];
+                    var taskId = task.id;
+                    var title = task['title'];
+                    var completed = task['completed'];
+
+                    return ListTile(
+                      leading: Checkbox(
+                        value: completed,
+                        onChanged: (_) => _toggleComplete(taskId, completed),
+                      ),
+                      title: Text(
+                        title,
+                        style: TextStyle(
+                          decoration: completed ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete),
+                        onPressed: () => _deleteTask(taskId),
+                      ),
+                    );
+                  },
                 );
               },
             ),
