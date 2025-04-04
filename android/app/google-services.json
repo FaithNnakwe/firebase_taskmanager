@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "525627403631",
+    "project_id": "task-manager-faith25",
+    "storage_bucket": "task-manager-faith25.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:525627403631:android:4b92ef6235d8c4e2b40c9a",
+        "android_client_info": {
+          "package_name": "com.example.firebase_task_manager"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAf2lZKlBHMymjwUzohe8Vzu_hL5Puq9W8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
