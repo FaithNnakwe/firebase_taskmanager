@@ -43,7 +43,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   TextEditingController taskController = TextEditingController();
   String? uid;
   String selectedPriority = 'Medium';
-  String sortingCriteria = 'timestamp';
+  String sortingCriteria = 'priority';
   bool showCompletedTasks = true;
   String? filterPriority;
 
@@ -55,6 +55,7 @@ void initState() {
       setState(() {
         uid = user.uid;
       });
+      updateExistingTasks();
       print("User logged in: ${user.uid}");
     } else {
       print("No user logged in.");
@@ -62,6 +63,19 @@ void initState() {
   });
 }
 
+Future<void> updateExistingTasks() async {
+  final tasks = await _firestore.collection('tasks').get();
+  for (var task in tasks.docs) {
+    if (!task.data().containsKey('priorityValue')) {
+      String priority = task['priority'];
+      Map<String, int> priorityOrder = {'High': 1, 'Medium': 2, 'Low': 3};
+
+      await _firestore.collection('tasks').doc(task.id).update({
+        'priorityValue': priorityOrder[priority] ?? 3, // Default to Low
+      });
+    }
+  }
+}
 
 Future<void> _addTask(String taskName) async {
   final currentUser = _auth.currentUser;
@@ -70,15 +84,19 @@ Future<void> _addTask(String taskName) async {
     return;
   }
 
+  // Map priority to numeric values
+  Map<String, int> priorityOrder = {'High': 1, 'Medium': 2, 'Low': 3};
+
   try {
     await _firestore.collection('tasks').add({
       'userId': currentUser.uid,
       'title': taskName,
       'priority': selectedPriority, // ✅ Fix: Store priority
+      'priorityValue': priorityOrder[selectedPriority], // Add numeric priority
       'completed': false,
-      'timestamp': FieldValue.serverTimestamp(),
     });
     print("Task added successfully!");
+    setState(() {}); // Trigger a UI update
   } catch (e) {
     print("Error adding task: $e");
   }
@@ -142,6 +160,16 @@ Future<void> _addTask(String taskName) async {
                 ),
                 DropdownButton<String>(
                   value: selectedPriority,
+                  style: TextStyle(
+    color: selectedPriority == 'Low'
+        ? Colors.green
+        : selectedPriority == 'Medium'
+            ? Colors.orange
+            : selectedPriority == 'High'
+                ? Colors.red
+                : Colors.black, // Default color for 'All' or other values
+    fontSize: 16, // Optional: Adjust font size
+  ),
                   items: ['High', 'Medium', 'Low'].map((String priority) {
                     return DropdownMenuItem<String>(
                       value: priority,
@@ -169,7 +197,6 @@ Future<void> _addTask(String taskName) async {
                 DropdownButton<String>(
                   value: sortingCriteria,
                   items: {
-                    'timestamp': 'Newest',
                     'priority': 'Priority',
                     'due_date': 'Due Date'
                   }.entries.map((entry) {
@@ -218,7 +245,8 @@ Future<void> _addTask(String taskName) async {
           stream: _firestore
               .collection('tasks')
               .where('userId', isEqualTo: uid) // Now uid is guaranteed to be non-null
-              .orderBy(sortingCriteria, descending: sortingCriteria == 'timestamp')
+              // .orderBy(sortingCriteria == 'timestamp' ? 'timestamp' : 'priority', descending: sortingCriteria == 'timestamp')
+              .orderBy('priorityValue',descending: false)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -233,7 +261,6 @@ Future<void> _addTask(String taskName) async {
               if (filterPriority != null && task['priority'] != filterPriority) return false;
               return true;
             }).toList();
-
             return ListView.builder(
               itemCount: tasks.length,
               itemBuilder: (context, index) {
