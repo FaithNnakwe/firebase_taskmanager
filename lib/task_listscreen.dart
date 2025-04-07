@@ -256,11 +256,14 @@ void _pickDueDate() async {
         icon: const Icon(Icons.calendar_today),
         onPressed: _pickDueDate,  // Call the DatePicker
       ),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: () => _addTask(taskController.text),
-                ),
-              ],
+                 TextButton(
+    onPressed: () => _addTask(taskController.text),
+    child: Text(
+      'Add',
+      style: TextStyle(color: Colors.black),  // Adjust color as needed
+    ),
+  ),
+              ], //onPressed: () => _addTask(taskController.text)
             ),
           ),
           Padding(

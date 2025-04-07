@@ -70,15 +70,15 @@ setState(() {
       );
     }
   } catch (e) {
-    print("Authentication Error: $e");
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Authentication failed: $e")),
+      SnackBar(content: Text("Authentication failed: User not found.")),
     );
   }
 }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Color(0xFFD0E1F9),
       appBar: AppBar(title: Text(isLogin ? "Login" : "Sign Up")),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
