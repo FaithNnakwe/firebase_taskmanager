@@ -46,6 +46,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   String sortingCriteria = 'priority';
   bool showCompletedTasks = true;
   String? filterPriority;
+  DateTime? dueDate;
 
   @override
 void initState() {
@@ -94,6 +95,7 @@ Future<void> _addTask(String taskName) async {
       'priority': selectedPriority, // ✅ Fix: Store priority
       'priorityValue': priorityOrder[selectedPriority], // Add numeric priority
       'completed': false,
+      'due_date': dueDate, // Store due date in Firestore
     });
     print("Task added successfully!");
     setState(() {}); // Trigger a UI update
@@ -113,16 +115,33 @@ Future<void> _addTask(String taskName) async {
     await _firestore.collection('tasks').doc(taskId).delete();
   }
 
-  void _showEditDialog(String taskId, String currentTitle) {
+  void _showEditDialog(String taskId, String currentTitle,DateTime? currentDueDate) {
   TextEditingController editController = TextEditingController(text: currentTitle);
+
+  // Set the current due date to the passed task's due date or null
+  setState(() {
+    dueDate = currentDueDate;
+  });
 
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text("Edit Task"),
-      content: TextField(
-        controller: editController,
-        decoration: const InputDecoration(hintText: "Update your task"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: editController,
+            decoration: const InputDecoration(hintText: "Update your task"),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: _pickDueDate,  // Open date picker when clicked
+            child: Text(
+              'Select Due Date: ${dueDate?.toLocal().toString().split(' ')[0] ?? 'Not set'}',
+            ),
+          ),
+        ],
       ),
       actions: [
         TextButton(
@@ -135,6 +154,7 @@ Future<void> _addTask(String taskName) async {
             if (newTitle.isNotEmpty) {
               await _firestore.collection('tasks').doc(taskId).update({
                 'title': newTitle,
+                'due_date': dueDate,  // Update due date when editing
               });
             }
             Navigator.pop(context);
@@ -145,6 +165,22 @@ Future<void> _addTask(String taskName) async {
     ),
   );
 }
+
+void _pickDueDate() async {
+  DateTime? pickedDate = await showDatePicker(
+    context: context,
+    initialDate: DateTime.now(),
+    firstDate: DateTime(2000),
+    lastDate: DateTime(2101),
+  );
+
+  if (pickedDate != null) {
+    setState(() {
+      dueDate = pickedDate;  // Update the due date when picked
+    });
+  }
+}
+
 
 
   Color _getPriorityColor(String priority) {
@@ -216,6 +252,10 @@ Future<void> _addTask(String taskName) async {
                     });
                   },
                 ),
+                IconButton(
+        icon: const Icon(Icons.calendar_today),
+        onPressed: _pickDueDate,  // Call the DatePicker
+      ),
                 IconButton(
                   icon: const Icon(Icons.add),
                   onPressed: () => _addTask(taskController.text),
@@ -303,6 +343,7 @@ Future<void> _addTask(String taskName) async {
                 var title = task['title'];
                 var completed = task['completed'];
                 var priority = task['priority'];
+                var dueDate = task['due_date'] != null ? (task['due_date'] as Timestamp).toDate() : null;
 
                 return ListTile(
                   leading: Checkbox(
@@ -315,13 +356,16 @@ Future<void> _addTask(String taskName) async {
                       decoration: completed ? TextDecoration.lineThrough : null,
                     ),
                   ),
+                  subtitle: Text(
+    'Due Date: ${dueDate?.toLocal().toString().split(' ')[0] ?? 'Not set'}',  // Display due date
+  ),
                   trailing: Row(
   mainAxisSize: MainAxisSize.min,
   children: [
     IconButton(
       icon: const Icon(Icons.edit),
       onPressed: () {
-        _showEditDialog(taskId, title);
+        _showEditDialog(taskId, title, dueDate);
       },
     ),
     IconButton(
