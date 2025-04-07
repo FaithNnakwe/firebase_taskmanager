@@ -47,6 +47,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   bool showCompletedTasks = true;
   String? filterPriority;
   DateTime? dueDate;
+  String selectedTaskType = 'daily';
 
   @override
 void initState() {
@@ -78,7 +79,7 @@ Future<void> updateExistingTasks() async {
   }
 }
 
-Future<void> _addTask(String taskName) async {
+Future<void> _addTask(String taskName, String taskType) async {
   final currentUser = _auth.currentUser;
   if (taskName.trim().isEmpty || currentUser == null) {
     print("Error: Task name is empty or user is null.");
@@ -96,6 +97,7 @@ Future<void> _addTask(String taskName) async {
       'priorityValue': priorityOrder[selectedPriority], // Add numeric priority
       'completed': false,
       'due_date': dueDate, // Store due date in Firestore
+      'taskType': taskType,  // Add task type (daily or hourly)
     });
     print("Task added successfully!");
     setState(() {}); // Trigger a UI update
@@ -196,197 +198,226 @@ void _pickDueDate() async {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(uid != null ? 'Welcome back!' : 'Task Manager'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => LoginScreen()),
-      );
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: taskController,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter new task',
-                    ),
-                  ),
-                ),
-                DropdownButton<String>(
-                  value: selectedPriority,
-                  style: TextStyle(
-    color: selectedPriority == 'Low'
-        ? Colors.green
-        : selectedPriority == 'Medium'
-            ? Colors.orange
-            : selectedPriority == 'High'
-                ? Colors.red
-                : Colors.black, // Default color for 'All' or other values
-    fontSize: 16, // Optional: Adjust font size
-  ),
-                  items: ['High', 'Medium', 'Low'].map((String priority) {
-                    return DropdownMenuItem<String>(
-                      value: priority,
-                      child: Text(priority),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      selectedPriority = value!;
-                    });
-                  },
-                ),
-                IconButton(
-        icon: const Icon(Icons.calendar_today),
-        onPressed: _pickDueDate,  // Call the DatePicker
-      ),
-                 TextButton(
-    onPressed: () => _addTask(taskController.text),
-    child: Text(
-      'Add',
-      style: TextStyle(color: Colors.black),  // Adjust color as needed
-    ),
-  ),
-              ], //onPressed: () => _addTask(taskController.text)
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                DropdownButton<String>(
-                  value: sortingCriteria,
-                  items: {
-                    'priority': 'Priority',
-                    'due_date': 'Due Date'
-                  }.entries.map((entry) {
-                    return DropdownMenuItem<String>(
-                      value: entry.key,
-                      child: Text(entry.value),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      sortingCriteria = value!;
-                    });
-                  },
-                ),
-                DropdownButton<String?>(
-                  hint: const Text('Filter Priority'),
-                  value: filterPriority,
-                  items: [null, 'High', 'Medium', 'Low'].map((priority) {
-                    return DropdownMenuItem<String?>(
-                      value: priority,
-                      child: Text(priority ?? 'All'),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      filterPriority = value;
-                    });
-                  },
-                ),
-                const Text('Show Completed'),
-                Switch(
-                  value: showCompletedTasks,
-                  onChanged: (value) {
-                    setState(() {
-                      showCompletedTasks = value;
-                    });
-                  },
-                  activeColor: Colors.blue,
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-  child: uid == null
-      ? Center(child: CircularProgressIndicator()) // Wait for uid to load
-      : StreamBuilder<QuerySnapshot>(
-          stream: _firestore
-              .collection('tasks')
-              .where('userId', isEqualTo: uid) // Now uid is guaranteed to be non-null
-              // .orderBy(sortingCriteria == 'timestamp' ? 'timestamp' : 'priority', descending: sortingCriteria == 'timestamp')
-              .orderBy('priorityValue',descending: false)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(child: CircularProgressIndicator());
-            }
-            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-              return Center(child: Text("No tasks found."));
-            }
-
-            final tasks = snapshot.data!.docs.where((task) {
-              if (!showCompletedTasks && task['completed'] == true) return false;
-              if (filterPriority != null && task['priority'] != filterPriority) return false;
-              return true;
-            }).toList();
-            return ListView.builder(
-              itemCount: tasks.length,
-              itemBuilder: (context, index) {
-                var task = tasks[index];
-                var taskId = task.id;
-                var title = task['title'];
-                var completed = task['completed'];
-                var priority = task['priority'];
-                var dueDate = task['due_date'] != null ? (task['due_date'] as Timestamp).toDate() : null;
-
-                return ListTile(
-                  leading: Checkbox(
-                    value: completed,
-                    onChanged: (_) => _toggleComplete(taskId, completed),
-                  ),
-                  title: Text(
-                    title,
-                    style: TextStyle(
-                      decoration: completed ? TextDecoration.lineThrough : null,
-                    ),
-                  ),
-                  subtitle: Text(
-    'Due Date: ${dueDate?.toLocal().toString().split(' ')[0] ?? 'Not set'}',  // Display due date
-  ),
-                  trailing: Row(
-  mainAxisSize: MainAxisSize.min,
-  children: [
-    IconButton(
-      icon: const Icon(Icons.edit),
-      onPressed: () {
-        _showEditDialog(taskId, title, dueDate);
-      },
-    ),
-    IconButton(
-      icon: const Icon(Icons.delete),
-      onPressed: () => _deleteTask(taskId),
-    ),
-  ],
-),
-                  tileColor: _getPriorityColor(priority).withOpacity(0.2),
-                );
-              },
+ @override
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: Text(uid != null ? 'Welcome back!' : 'Task Manager'),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.logout),
+          onPressed: () async {
+            await FirebaseAuth.instance.signOut();
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => LoginScreen()),
             );
           },
         ),
-)
-        ],
-      ),
+      ],
+    ),
+    body: Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: taskController,
+                  decoration: const InputDecoration(
+                    hintText: 'Enter new task',
+                  ),
+                ),
+              ),
+              DropdownButton<String>(
+                value: selectedPriority,
+                style: TextStyle(
+                  color: selectedPriority == 'Low'
+                      ? Colors.green
+                      : selectedPriority == 'Medium'
+                          ? Colors.orange
+                          : selectedPriority == 'High'
+                              ? Colors.red
+                              : Colors.black,
+                  fontSize: 16,
+                ),
+                items: ['High', 'Medium', 'Low'].map((String priority) {
+                  return DropdownMenuItem<String>(
+                    value: priority,
+                    child: Text(priority),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedPriority = value!;
+                  });
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.calendar_today),
+                onPressed: _pickDueDate,
+              ),
+              TextButton(
+                onPressed: () => _addTask(taskController.text, selectedTaskType),
+                child: const Text(
+                  'Add',
+                  style: TextStyle(color: Colors.black),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              DropdownButton<String>(
+                value: sortingCriteria,
+                items: {
+                  'priority': 'Priority',
+                  'due_date': 'Due Date'
+                }.entries.map((entry) {
+                  return DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    sortingCriteria = value!;
+                  });
+                },
+              ),
+              DropdownButton<String?>(
+                hint: const Text('Filter Priority'),
+                value: filterPriority,
+                items: [null, 'High', 'Medium', 'Low'].map((priority) {
+                  return DropdownMenuItem<String?>(
+                    value: priority,
+                    child: Text(priority ?? 'All'),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    filterPriority = value;
+                  });
+                },
+              ),
+              DropdownButton<String>(
+  value: selectedTaskType,
+  items: ['daily', 'hourly'].map((String type) {
+    return DropdownMenuItem<String>(
+      value: type,
+      child: Text(type[0].toUpperCase() + type.substring(1)), // Capitalize
     );
-  }
+  }).toList(),
+  onChanged: (value) {
+    setState(() {
+      selectedTaskType = value!;
+    });
+  },
+),
+              Switch(
+                value: showCompletedTasks,
+                onChanged: (value) {
+                  setState(() {
+                    showCompletedTasks = value;
+                  });
+                },
+                activeColor: Colors.blue,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: uid == null
+              ? const Center(child: CircularProgressIndicator())
+              : StreamBuilder<QuerySnapshot>(
+                  stream: _firestore
+                      .collection('tasks')
+                      .where('userId', isEqualTo: uid)
+                      .orderBy('priorityValue', descending: false)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const Center(child: Text("No tasks found."));
+                    }
+
+                    final tasks = snapshot.data!.docs.where((task) {
+                      if (!showCompletedTasks && task['completed'] == true) return false;
+                      if (filterPriority != null && task['priority'] != filterPriority) return false;
+                      return true;
+                    }).toList();
+
+                    var dailyTasks = tasks.where((task) => task['taskType'] == 'daily').toList();
+                    var hourlyTasks = tasks.where((task) => task['taskType'] == 'hourly').toList();
+
+                    List<Widget> buildTaskList(List tasks, String header) {
+                      return [
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(header, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        ),
+                        ...tasks.map((task) {
+                          var taskId = task.id;
+                          var title = task['title'];
+                          var completed = task['completed'];
+                          var priority = task['priority'];
+                          var dueDate = task['due_date'] != null
+                              ? (task['due_date'] as Timestamp).toDate()
+                              : null;
+
+                          return ListTile(
+                            leading: Checkbox(
+                              value: completed,
+                              onChanged: (_) => _toggleComplete(taskId, completed),
+                            ),
+                            title: Text(
+                              title,
+                              style: TextStyle(
+                                decoration: completed ? TextDecoration.lineThrough : null,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Due Date: ${dueDate?.toLocal().toString().split(' ')[0] ?? 'Not set'}',
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit),
+                                  onPressed: () {
+                                    _showEditDialog(taskId, title, dueDate);
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete),
+                                  onPressed: () => _deleteTask(taskId),
+                                ),
+                              ],
+                            ),
+                            tileColor: _getPriorityColor(priority).withOpacity(0.2),
+                          );
+                        }).toList(),
+                      ];
+                    }
+
+                    return ListView(
+                      children: [
+                        ...buildTaskList(dailyTasks, "Daily Tasks"),
+                        ...buildTaskList(hourlyTasks, "Hourly Tasks"),
+                      ],
+                    );
+                  },
+                ),
+        ),
+      ],
+    ),
+  );
+}
 }
