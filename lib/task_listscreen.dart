@@ -303,6 +303,7 @@ void _pickDueDate() async {
                     });
                   },
                 ),
+                const Text('Show Completed'),
                 Switch(
                   value: showCompletedTasks,
                   onChanged: (value) {
@@ -334,7 +335,7 @@ void _pickDueDate() async {
             }
 
             final tasks = snapshot.data!.docs.where((task) {
-              if (!showCompletedTasks && task['completed']) return false;
+              if (!showCompletedTasks && task['completed'] == true) return false;
               if (filterPriority != null && task['priority'] != filterPriority) return false;
               return true;
             }).toList();
