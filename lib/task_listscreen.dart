@@ -113,6 +113,40 @@ Future<void> _addTask(String taskName) async {
     await _firestore.collection('tasks').doc(taskId).delete();
   }
 
+  void _showEditDialog(String taskId, String currentTitle) {
+  TextEditingController editController = TextEditingController(text: currentTitle);
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Edit Task"),
+      content: TextField(
+        controller: editController,
+        decoration: const InputDecoration(hintText: "Update your task"),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cancel"),
+        ),
+        TextButton(
+          onPressed: () async {
+            String newTitle = editController.text.trim();
+            if (newTitle.isNotEmpty) {
+              await _firestore.collection('tasks').doc(taskId).update({
+                'title': newTitle,
+              });
+            }
+            Navigator.pop(context);
+          },
+          child: const Text("Save"),
+        ),
+      ],
+    ),
+  );
+}
+
+
   Color _getPriorityColor(String priority) {
     switch (priority) {
       case 'High':
@@ -130,7 +164,7 @@ Future<void> _addTask(String taskName) async {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Task Manager'),
+        title: Text(uid != null ? 'Welcome back!' : 'Task Manager'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -281,10 +315,21 @@ Future<void> _addTask(String taskName) async {
                       decoration: completed ? TextDecoration.lineThrough : null,
                     ),
                   ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () => _deleteTask(taskId),
-                  ),
+                  trailing: Row(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    IconButton(
+      icon: const Icon(Icons.edit),
+      onPressed: () {
+        _showEditDialog(taskId, title);
+      },
+    ),
+    IconButton(
+      icon: const Icon(Icons.delete),
+      onPressed: () => _deleteTask(taskId),
+    ),
+  ],
+),
                   tileColor: _getPriorityColor(priority).withOpacity(0.2),
                 );
               },

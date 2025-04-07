@@ -13,16 +13,44 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController passwordController = TextEditingController();
   bool isLogin = true; // Toggle between Login & Signup
 
+  String emailError = '';
+  String passwordError = '';
+
+
 Future<void> _authenticate() async {
   String email = emailController.text.trim();
   String password = passwordController.text.trim();
 
-  if (email.isEmpty || password.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Please enter both email and password")),
-    );
-    return;
+   // Email validation: only allow common domains
+  final emailRegex = RegExp(r'^[\w-\.]+@(gmail|outlook|yahoo|hotmail)\.(com|net|org)$');
+  
+  // Password validation: must contain at least 1 uppercase, 1 number, and be at least 8 chars
+  final passwordRegex = RegExp(r'^(?=.*[A-Z])(?=.*\d).{8,}$');
+
+setState(() {
+    emailError = '';
+    passwordError = '';
+  });
+
+  bool hasError = false;
+
+  if (email.isEmpty) {
+    setState(() => emailError = 'Email is required');
+    hasError = true;
+  } else if (!emailRegex.hasMatch(email)) {
+    setState(() => emailError = 'Please use a valid Gmail, Outlook, or Yahoo email');
+    hasError = true;
   }
+
+  if (password.isEmpty) {
+    setState(() => passwordError = 'Password is required');
+    hasError = true;
+  } else if (!passwordRegex.hasMatch(password)) {
+    setState(() => passwordError = 'Password must contain at least one uppercase letter, one number, and be at least 8 characters');
+    hasError = true;
+  }
+
+  if (hasError) return;
 
   try {
     UserCredential userCredential;
@@ -42,39 +70,12 @@ Future<void> _authenticate() async {
       );
     }
   } catch (e) {
-    String errorMessage = "Authentication failed.";
-    if (e is FirebaseAuthException) {
-      // Firebase authentication errors
-      switch (e.code) {
-        case 'user-not-found':
-          errorMessage = "No user found for that email.";
-          break;
-        case 'wrong-password':
-          errorMessage = "Incorrect password provided.";
-          break;
-        case 'email-already-in-use':
-          errorMessage = "This email is already in use.";
-          break;
-        case 'invalid-email':
-          errorMessage = "The email address is not valid.";
-          break;
-        case 'network-request-failed':
-          errorMessage = "Network error. Please try again later.";
-          break;
-        default:
-          errorMessage = "Unknown error occurred. Please try again.";
-          break;
-      }
-    }
-
     print("Authentication Error: $e");
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(errorMessage)),
+      SnackBar(content: Text("Authentication failed: $e")),
     );
   }
 }
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -86,12 +87,14 @@ Future<void> _authenticate() async {
           children: [
             TextField(
               controller: emailController,
-              decoration: InputDecoration(labelText: "Email"),
+              decoration: InputDecoration(labelText: "Email", 
+               errorText: emailError.isNotEmpty ? emailError : null,),
               keyboardType: TextInputType.emailAddress,
             ),
             TextField(
               controller: passwordController,
-              decoration: InputDecoration(labelText: "Password"),
+              decoration: InputDecoration(labelText: "Password", 
+              errorText: passwordError.isNotEmpty ? passwordError : null,),
               obscureText: true,
             ),
             SizedBox(height: 20),
